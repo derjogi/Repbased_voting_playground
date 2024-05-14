@@ -1,4 +1,9 @@
 import Testdata
+import sys, os
+sys.path.append(os.path.abspath("../pyvoting"))
+import pyvoting as pv
+import pandas as pd
+
 
 CANDIDATES = Testdata.CANDIDATES
 
@@ -9,14 +14,33 @@ CANDIDATES = Testdata.CANDIDATES
 def popularity_contest(sample):
 
     votecount = {}
-    for k in CANDIDATES.keys():
-        votecount[k] = len([voter for voter in sample if voter.vote == CANDIDATES[k]])
+    for candidate in CANDIDATES.keys():
+        votecount[candidate] = len([voter for voter in sample if voter.vote == CANDIDATES[candidate]])
     
     return max(votecount, key = votecount.get)
 
 
-# Run the test
-votes = Testdata.getSample()            # Fetch the list of votes - ie. voters with preferred candidates and personal qualifications
-winner = popularity_contest(votes)      # Run the voting algorithm
-print(winner)                           # Print the id of the winner
+def ranked_choice(votes, candidates = Testdata.candidate_names):
+    election = pv.RankedChoiceVoting(candidates)
+    for voter in votes:
+        election.AddBallot(get_as_ballot(voter))
+    
+    results = election.RunElection()
+    print(results)
+    return results
 
+def tier_list_voting(votes, candidates = Testdata.candidate_names):
+    election = pv.TierListVoting(candidates)
+    for voter in votes:
+        election.AddBallot(get_as_ballot(voter))
+    
+    results = election.RunElection()
+    print(results)
+    return results
+
+def get_as_ballot(voter) -> pd.Series:
+    ballot = {}
+    if hasattr(voter, 'weighted_vote'):
+        for candidate, weight in voter.weighted_vote.candidate_weights.items():
+            ballot[candidate.id] = weight
+    return pd.Series(ballot)

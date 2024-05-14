@@ -1,4 +1,6 @@
 from enum import Enum
+import pandas as pd
+from typing import Dict, Union, TypeAlias
 
 class Accomplishments(Enum):
 
@@ -6,7 +8,7 @@ class Accomplishments(Enum):
 
 class FellowshipCandidate:
 
-    def __init__(self, id, accomplishments = []):
+    def __init__(self, id, accomplishments = [Accomplishments.FULFILLED_ALL_REQUIREMENTS]):
 
         self.id = id
 
@@ -15,16 +17,56 @@ class FellowshipCandidate:
     
     def __eq__(self, other):
         return (self.id == other.id)
+    
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+class WeightedVote:
+    def __init__(self, candidate_weights: Dict[FellowshipCandidate, float]):
+        self.candidate_weights = candidate_weights
+
+    def __repr__(self):
+        return f"WeightedVote({self.candidate_weights})"
+
+CandidateWeight: TypeAlias = Dict[str, float]
+FellowshipWeight: TypeAlias = Dict[FellowshipCandidate, float]
+
+# A vote can either be a single FellowshipCandidate, or a WeightedVote.
+Vote = Union[FellowshipWeight, CandidateWeight, FellowshipCandidate, WeightedVote]
 
 class Voter:
 
-    def __init__(self, vote = None, nfts = [], hasTeaAccount = True, hasWalletConnected = True, isCandidate = False):
-
-        # The candidate that the voter prefers. Must be a valid fellowship candidate.
-        if vote is None or not isinstance(vote, FellowshipCandidate):
-            raise Exception("Invalid vote!")        
-        self.vote = vote
-
+    def __init__(self, vote: Vote, nfts = [], hasTeaAccount = True, hasWalletConnected = True, isCandidate = False):
+        if isinstance(vote, dict):
+            vote_w_candidates = {}
+            for k, v in vote.items():
+                if isinstance(k, str):
+                    vote_w_candidates[FellowshipCandidate(k)] = v
+                else:
+                    vote_w_candidates[k] = v
+            vote = vote_w_candidates
+            vote = WeightedVote(vote)
+        if isinstance(vote, WeightedVote):
+            # sanitize weights so they're proportional 
+            # in case there's a voting mechanism that allows arbitrary numbers.)
+            total_weight = sum(vote.candidate_weights.values())
+            for candidate in vote.candidate_weights:
+                vote.candidate_weights[candidate] /= total_weight
+            self.weighted_vote = vote
+            # If this is used with simple voting:
+            self.vote = max(vote.candidate_weights, key=vote.candidate_weights.get)
+        elif isinstance(vote, FellowshipCandidate):
+            self.vote = vote
+        else:
+            raise Exception(
+                """
+                Invalid vote!\n
+                Either provide a FellowshipCandidate (e.g. 'C1'),\n 
+                or a dictionary of candidates and their weights: \n
+                '{{'C1':0.4, 'C2':0.6}}'
+                """
+                )        
+        
         # List of NFTs that this voter holds. Must refer to the NFT enum. Ignore invalid NFTs.
         self.nfts = [nft for nft in nfts if nft in iter(NFT)] 
 
@@ -36,7 +78,17 @@ class Voter:
 
         # Candidates are not allowed to vote (?)
         self.isCandidate = isCandidate
-        
+
+class Ballot:
+    def __init__(self, voters: [Voter]):
+        self.voters = voters
+        ballot = {}
+        for voter in voters:
+            if hasattr(voter, 'weighted_vote'):
+                for candidate, weight in voter.weighted_vote.candidate_weights.items():
+                    ballot[candidate] = weight
+        self.ballot = pd.Series(ballot)
+
 class NFT(Enum):
 
     FUNDA_1 = 1                         # TE Fundamentals module 1
