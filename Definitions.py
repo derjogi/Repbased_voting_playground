@@ -1,6 +1,6 @@
 from enum import Enum
 import pandas as pd
-from typing import Dict, Union, TypeAlias
+from typing import List, Dict, Union, TypeAlias
 
 class Accomplishments(Enum):
 
@@ -21,6 +21,19 @@ class FellowshipCandidate:
     def __hash__(self) -> int:
         return hash(self.id)
 
+
+# There are different ways to specify a 'valid' vote, we want to make sure that we let typical ones pass.
+# All of these are ultimately converted to a WeightedVote object.
+# * SingleCandidate is the easiest with just the ID or a FellowshipCandidate object and no weights
+# * RankedCandidates just has a list of candidate IDs in order
+# * CandidateWeight is a dictionary with the candidate's ID as key and associated weight
+# * FellowshipWeight is a dictionary with the candidate's FellowshipCandidate as key and associated weight
+# * WeightedVote is the most complete object wrapped around the FellowshipWeight.
+
+SingleCandidate: TypeAlias = str
+RankedCandidates: TypeAlias = List[str]
+CandidateWeight: TypeAlias = Dict[str, float]
+FellowshipWeight: TypeAlias = Dict[FellowshipCandidate, float]
 class WeightedVote:
     def __init__(self, candidate_weights: Dict[FellowshipCandidate, float]):
         self.candidate_weights = candidate_weights
@@ -28,44 +41,13 @@ class WeightedVote:
     def __repr__(self):
         return f"WeightedVote({self.candidate_weights})"
 
-CandidateWeight: TypeAlias = Dict[str, float]
-FellowshipWeight: TypeAlias = Dict[FellowshipCandidate, float]
-
 # A vote can either be a single FellowshipCandidate, or a WeightedVote.
-Vote = Union[FellowshipWeight, CandidateWeight, FellowshipCandidate, WeightedVote]
+Vote = Union[SingleCandidate, RankedCandidates, FellowshipWeight, CandidateWeight, FellowshipCandidate, WeightedVote]
 
 class Voter:
 
     def __init__(self, vote: Vote, nfts = [], hasTeaAccount = True, hasWalletConnected = True, isCandidate = False):
-        if isinstance(vote, dict):
-            vote_w_candidates = {}
-            for k, v in vote.items():
-                if isinstance(k, str):
-                    vote_w_candidates[FellowshipCandidate(k)] = v
-                else:
-                    vote_w_candidates[k] = v
-            vote = vote_w_candidates
-            vote = WeightedVote(vote)
-        if isinstance(vote, WeightedVote):
-            # sanitize weights so they're proportional 
-            # in case there's a voting mechanism that allows arbitrary numbers.)
-            total_weight = sum(vote.candidate_weights.values())
-            for candidate in vote.candidate_weights:
-                vote.candidate_weights[candidate] /= total_weight
-            self.weighted_vote = vote
-            # If this is used with simple voting:
-            self.vote = max(vote.candidate_weights, key=vote.candidate_weights.get)
-        elif isinstance(vote, FellowshipCandidate):
-            self.vote = vote
-        else:
-            raise Exception(
-                """
-                Invalid vote!\n
-                Either provide a FellowshipCandidate (e.g. 'C1'),\n 
-                or a dictionary of candidates and their weights: \n
-                '{{'C1':0.4, 'C2':0.6}}'
-                """
-                )        
+        self.normalized_vote = self.normalize(vote)
         
         # List of NFTs that this voter holds. Must refer to the NFT enum. Ignore invalid NFTs.
         self.nfts = [nft for nft in nfts if nft in iter(NFT)] 
@@ -79,15 +61,78 @@ class Voter:
         # Candidates are not allowed to vote (?)
         self.isCandidate = isCandidate
 
-class Ballot:
-    def __init__(self, voters: [Voter]):
-        self.voters = voters
-        ballot = {}
-        for voter in voters:
-            if hasattr(voter, 'weighted_vote'):
-                for candidate, weight in voter.weighted_vote.candidate_weights.items():
-                    ballot[candidate] = weight
-        self.ballot = pd.Series(ballot)
+    def as_weighted_vote(self, vote: Vote) -> WeightedVote:
+        # Go through the different shapes of a vote, and build them up to a propper WeightedVote
+        if isinstance(vote, str):
+            return WeightedVote({FellowshipCandidate(vote): 1}) # Assign a weight of 1, all others will implicitly have 0
+        elif isinstance(vote, FellowshipCandidate):
+            return WeightedVote({vote: 1})  # Assign a weight of 1, all others will implicitly have 0
+        elif isinstance(vote, list):
+            as_weighted = {}
+            for i, candidate in enumerate(reversed(vote)):
+                if isinstance(candidate, str):
+                    as_weighted[FellowshipCandidate(candidate)] = i + 1     # Assign increasing weights such that first candidate gets the highest weight
+                else:
+                    as_weighted[candidate] = i + 1
+            return WeightedVote(as_weighted)
+        elif isinstance(vote, dict):
+            # Different dict shapes are possible here (unfortunately we can't check for a TypeAlias).
+            # Convert the dict to a valid WeightedVote per candidate
+            vote_w_candidates = {}
+            for k, v in vote.items():
+                if isinstance(k, str):
+                    vote_w_candidates[FellowshipCandidate(k)] = v
+                else:
+                    vote_w_candidates[k] = v
+            return WeightedVote(vote_w_candidates)
+        elif isinstance(vote, WeightedVote):
+            return vote
+        else:
+            raise Exception(
+                """
+                Invalid vote!\n
+                Provide a FellowshipCandidate (e.g. 'C1'),\n 
+                or a dictionary of candidates and their weights: \n
+                '{{'C1':0.4, 'C2':0.6}}'
+                """
+                )    
+
+    def normalize(self, vote: Vote) -> WeightedVote:
+        """
+        Normalizes a vote to ensure that all votes 
+            * have a weight
+            * the weight adds up to 1 
+            * the preferred candidate is ranked first
+        """
+
+        weighted_vote = self.as_weighted_vote(vote)
+
+        normalized = {}
+        total_weight = sum(weighted_vote.candidate_weights.values())
+        for candidate in weighted_vote.candidate_weights:
+            normalized[candidate] = weighted_vote.candidate_weights[candidate]/total_weight
+        sorted_candidates = sorted(normalized.items(), key=lambda x: x[1], reverse=True)
+        return sorted_candidates
+
+    def get_single_vote(self):
+        """
+        Returns the single candidate that this voter voted for. If the voter voted for multiple candidates, this will return the first/highest rated one.
+        """
+        return self.normalized_vote[0][0]
+    
+    def get_ranked(self):
+        """
+        Returns a list of candidates that this voter voted for, ordered by their weight with the best candidate first.
+        """
+        # Just get the list of candidates in order, no actual weights needed
+        return [candidate for candidate in self.weighted_vote.items()]
+    
+    def get_weighted(self):
+        """
+        Returns a dictionary of candidates and their weights.
+        """
+        return self.weighted_vote
+
 
 class NFT(Enum):
 

@@ -1,6 +1,7 @@
 import unittest
 import Testdata
 from Vote import *
+from Definitions import FellowshipCandidate
 
 
 class TestRequirements(unittest.TestCase):
@@ -21,29 +22,22 @@ class TestRequirements(unittest.TestCase):
         pass # TODO
 
     def test_removing_candidate_does_not_change_ranking(self):        
-        ballots = Testdata.getRandomVotes(100, 6)
-        candidates = list(set([ballot.vote.id for ballot in ballots]))
+        voters = Testdata.getRandomVoters(100, 6)
+        candidates = list(set([voter.get_single_vote() for voter in voters]))
         print(candidates)
-        results = tier_list_voting(ballots, candidates)
-        
-        # Just make sure that we do have a distinct order:
-        for i in range(len(results)-1):
-            self.assertLess(results[i][1], results[i+1][1])
+        results = popularity_contest(voters, candidates)
             
-        candidates_in_order = [x[0] for x in results]
+        candidates_in_order = [x for x in results]
         print('Order of candidates after first round: ', candidates_in_order)
-        one_candidate_less = candidates_in_order.copy()
-        one_candidate_less.remove(one_candidate_less[3])
+        candidates_in_order.remove(candidates_in_order[2])
 
         # remove one candidate and check that the results are again the same after the vote:
-        results = tier_list_voting(ballots, one_candidate_less)
+        results = popularity_contest(voters, [FellowshipCandidate(c) for c in candidates_in_order])
         
-        candidates_in_order_2 = [x[0] for x in results]
+        candidates_in_order_2 = [x for x in results]
         print('Order of candidates after second round: ', candidates_in_order_2)
         # Make sure that we do have the same order:
-        for i in range(len(results)-1):
-            self.assertLess(results[i][1], results[i+1][1])
-            self.assertEqual(results[i][0], one_candidate_less[i])  
+        self.assertEqual(candidates_in_order, candidates_in_order_2)  
     
     def test_no_tied_winners(self):
         pass # TODO; currently happens with default RCV & TLV!

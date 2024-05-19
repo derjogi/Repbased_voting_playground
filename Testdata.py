@@ -32,7 +32,7 @@ def getSample():
         Voter(CANDIDATES["C4"], []),
     ]
 
-def getRandomVotes(num_voters = 100, num_candidates = 4):
+def getRandomVoters(num_voters = 100, num_candidates = 4):
     """
     Generates a random set of n voters.
     
