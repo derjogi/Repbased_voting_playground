@@ -50,7 +50,7 @@ def getRandomVoters(num_voters = 100, num_candidates = 4):
         # generate a weighted vote; if the election mechanism doesn't support 
         #  weighted votes, the candidate with the highest weight will be returned
         candidate_weights = {candidate: random.random() for candidate in candidates}
-        weights = WeightedVote(candidate_weights)
+        weights = DistributedVote(candidate_weights)
         nfts = random.sample(list(NFT), random.randint(0, len(NFT)))
         
         try:

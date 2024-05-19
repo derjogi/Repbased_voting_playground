@@ -4,6 +4,7 @@ import sys, os
 # import pyvoting as pv
 import pandas as pd
 from Definitions import Voter, FellowshipCandidate
+from typing import Callable
 
 
 CANDIDATES = Testdata.CANDIDATES
@@ -19,6 +20,16 @@ def popularity_contest(voters: list[Voter], candidates: list[FellowshipCandidate
     
     return dict(sorted(votecount.items(), key=lambda x: x[1], reverse=True))
     # return max(votecount, key=votecount.get)
+
+
+def accumulated_scores_voting(voters: list[Voter], candidates: list[FellowshipCandidate] = CANDIDATES.values(), weighing_mechanism: Callable[[Voter], int] = None):
+    candidate_scores = {}
+    for voter in voters:
+        for candidate, distribution in voter.get_distributed().distributed_vote.items():
+            if weighing_mechanism is None:
+                candidate_scores[candidate] += distribution
+            else:
+                candidate_scores[candidate] += weighing_mechanism(voter)
 
 # Unfortunately, the pyvoting package doesn't work as a package because of some broken imports.
 # So I'll have to uncomment these methods for a bit until that is fixed.

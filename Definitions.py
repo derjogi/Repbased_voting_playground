@@ -26,23 +26,23 @@ class FellowshipCandidate:
 # All of these are ultimately converted to a WeightedVote object.
 # * SingleCandidate is the easiest with just the ID or a FellowshipCandidate object and no weights
 # * RankedCandidates just has a list of candidate IDs in order
-# * CandidateWeight is a dictionary with the candidate's ID as key and associated weight
-# * FellowshipWeight is a dictionary with the candidate's FellowshipCandidate as key and associated weight
-# * WeightedVote is the most complete object wrapped around the FellowshipWeight.
+# * CandidateDistribution is a dictionary with the candidate's ID as key and the distribution (weight/percentage that is given to that candidate (always relative to other candidates))
+# * FellowshipDistribution is a dictionary with the candidate's FellowshipCandidate as key and associated distribution
+# * DistributedVote is the most complete object wrapped around the FellowshipDistribution.
 
 SingleCandidate: TypeAlias = str
 RankedCandidates: TypeAlias = List[str]
-CandidateWeight: TypeAlias = Dict[str, float]
-FellowshipWeight: TypeAlias = Dict[FellowshipCandidate, float]
-class WeightedVote:
-    def __init__(self, candidate_weights: Dict[FellowshipCandidate, float]):
-        self.candidate_weights = candidate_weights
+CandidateDistribution: TypeAlias = Dict[str, float]
+FellowshipDistribution: TypeAlias = Dict[FellowshipCandidate, float]
+class DistributedVote:
+    def __init__(self, distributed_vote: Dict[FellowshipCandidate, float]):
+        self.distributed_vote = distributed_vote
 
     def __repr__(self):
-        return f"WeightedVote({self.candidate_weights})"
+        return f"DistributedVote({self.distributed_vote})"
 
-# A vote can either be a single FellowshipCandidate, or a WeightedVote.
-Vote = Union[SingleCandidate, RankedCandidates, FellowshipWeight, CandidateWeight, FellowshipCandidate, WeightedVote]
+# A vote is the union of DistributedVote and all the simpler variants
+Vote = Union[SingleCandidate, RankedCandidates, FellowshipDistribution, CandidateDistribution, FellowshipCandidate, DistributedVote]
 
 class Voter:
 
@@ -61,12 +61,12 @@ class Voter:
         # Candidates are not allowed to vote (?)
         self.isCandidate = isCandidate
 
-    def as_weighted_vote(self, vote: Vote) -> WeightedVote:
+    def as_distributed_vote(self, vote: Vote) -> DistributedVote:
         # Go through the different shapes of a vote, and build them up to a propper WeightedVote
         if isinstance(vote, str):
-            return WeightedVote({FellowshipCandidate(vote): 1}) # Assign a weight of 1, all others will implicitly have 0
+            return DistributedVote({FellowshipCandidate(vote): 1}) # Assign a weight of 1, all others will implicitly have 0
         elif isinstance(vote, FellowshipCandidate):
-            return WeightedVote({vote: 1})  # Assign a weight of 1, all others will implicitly have 0
+            return DistributedVote({vote: 1})  # Assign a weight of 1, all others will implicitly have 0
         elif isinstance(vote, list):
             as_weighted = {}
             for i, candidate in enumerate(reversed(vote)):
@@ -74,7 +74,7 @@ class Voter:
                     as_weighted[FellowshipCandidate(candidate)] = i + 1     # Assign increasing weights such that first candidate gets the highest weight
                 else:
                     as_weighted[candidate] = i + 1
-            return WeightedVote(as_weighted)
+            return DistributedVote(as_weighted)
         elif isinstance(vote, dict):
             # Different dict shapes are possible here (unfortunately we can't check for a TypeAlias).
             # Convert the dict to a valid WeightedVote per candidate
@@ -84,8 +84,8 @@ class Voter:
                     vote_w_candidates[FellowshipCandidate(k)] = v
                 else:
                     vote_w_candidates[k] = v
-            return WeightedVote(vote_w_candidates)
-        elif isinstance(vote, WeightedVote):
+            return DistributedVote(vote_w_candidates)
+        elif isinstance(vote, DistributedVote):
             return vote
         else:
             raise Exception(
@@ -97,21 +97,23 @@ class Voter:
                 """
                 )    
 
-    def normalize(self, vote: Vote) -> WeightedVote:
+    def normalize(self, vote: Vote) -> DistributedVote:
         """
         Normalizes a vote to ensure that all votes 
-            * have a weight
-            * the weight adds up to 1 
+            * have a distribution
+            * the distribution adds up to 1 
+            * if there's a weighing_mechanism, the weight is calculated based on the NFTs and calculated with the normalized distribution
             * the preferred candidate is ranked first
         """
 
-        weighted_vote = self.as_weighted_vote(vote)
+        vote = self.as_distributed_vote(vote)
 
         normalized = {}
-        total_weight = sum(weighted_vote.candidate_weights.values())
-        for candidate in weighted_vote.candidate_weights:
-            normalized[candidate] = weighted_vote.candidate_weights[candidate]/total_weight
+        summed = sum(vote.distributed_vote.values())
+        for candidate in vote.distributed_vote:
+            normalized[candidate] = vote.distributed_vote[candidate]/summed
         sorted_candidates = sorted(normalized.items(), key=lambda x: x[1], reverse=True)
+        
         return sorted_candidates
 
     def get_single_vote(self):
@@ -124,14 +126,14 @@ class Voter:
         """
         Returns a list of candidates that this voter voted for, ordered by their weight with the best candidate first.
         """
-        # Just get the list of candidates in order, no actual weights needed
-        return [candidate for candidate in self.weighted_vote.items()]
+        # Just get the list of candidates in order, no actual distribution needed
+        return [candidate for candidate in self.normalized_vote.items()]
     
-    def get_weighted(self):
+    def get_distributed(self):
         """
-        Returns a dictionary of candidates and their weights.
+        Returns a dictionary of candidates and their relative distributions.
         """
-        return self.weighted_vote
+        return self.normalized_vote
 
 
 class NFT(Enum):
