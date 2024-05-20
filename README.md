@@ -9,6 +9,13 @@ the goal of which it is to come up with a suitable reputation based voting algor
 
 ...But feel free to play around with the code on your own machine, and use it for any constructive purpose you can think of. 
 
+## Interactive Notebook
+
+The easiest way to play around with this (you'll still have to do a bit of coding though)
+is this python notebook: [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/derjogi/Repbased_voting_playground/HEAD?labpath=Playground.ipynb)
+
+
+
 ## Files
 
 * **[Definitions.py](Definitions.py)**
