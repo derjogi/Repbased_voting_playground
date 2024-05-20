@@ -18,18 +18,25 @@ def popularity_contest(voters: list[Voter], candidates: list[FellowshipCandidate
     for candidate in candidates:
         votecount[candidate.id] = len([voter for voter in voters if voter.get_single_vote() == candidate])
     
-    return dict(sorted(votecount.items(), key=lambda x: x[1], reverse=True))
+    return sort(votecount)
     # return max(votecount, key=votecount.get)
 
+def sort(results):
+    return dict(sorted(results.items(), key=lambda x: x[1], reverse=True))
 
 def accumulated_scores_voting(voters: list[Voter], candidates: list[FellowshipCandidate] = CANDIDATES.values(), weighing_mechanism: Callable[[Voter], int] = None):
     candidate_scores = {}
     for voter in voters:
-        for candidate, distribution in voter.get_distributed().distributed_vote.items():
+        for candidate, distribution in voter.get_distributed():
+            id = candidate.id
+            print(f'Voter voted for {id} with distribution {distribution}')
+            if id not in candidate_scores:
+                candidate_scores[id] = 0
             if weighing_mechanism is None:
-                candidate_scores[candidate] += distribution
+                candidate_scores[id] += distribution
             else:
-                candidate_scores[candidate] += weighing_mechanism(voter)
+                candidate_scores[id] += weighing_mechanism(voter)
+    return sort(candidate_scores)
 
 # Unfortunately, the pyvoting package doesn't work as a package because of some broken imports.
 # So I'll have to uncomment these methods for a bit until that is fixed.

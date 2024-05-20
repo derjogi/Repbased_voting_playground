@@ -38,16 +38,6 @@ class TestRequirements(unittest.TestCase):
         print('Order of candidates after second round: ', candidates_in_order_2)
         # Make sure that we do have the same order:
         self.assertEqual(candidates_in_order, candidates_in_order_2)  
-
-    def test_weigthed_votes(self):
-        voters = Testdata.getRandomVoters()
-        results_no_weights = popularity_contest(voters)
-        
-        def weighing_mechanism(voter):
-            return voter.weighted_vote
-
-        results_with_weights = popularity_contest(voters, weighing_mechanism)
-
     
     def test_no_tied_winners(self):
         pass # TODO; currently happens with default RCV & TLV!

@@ -1,53 +1,73 @@
-import unittest
 from Vote import *
 from Definitions import Voter
+import pytest
 
-class TestPopularityContest(unittest.TestCase):
+@pytest.fixture(params=["popularity", "score"])
+def voting_mechanism(request):
+    if request.param == "popularity":
+        return popularity_contest
+    elif request.param == "score":
+        return accumulated_scores_voting
 
-    def test_single_vote(self):
-        sample = [Voter(CANDIDATES['C1'])]
-        result = popularity_contest(sample)
-        self.assertEqual(result, "C1")
+# def evaluate(voting_mechanism, result, expected):
+#     if voting_mechanism == popularity_contest:
+#         assert next(iter(result)) == 
+#     elif voting_mechanism == accumulated_scores_voting:
+#         return result
 
-    def test_tie(self):
-        sample = [Voter(CANDIDATES["C1"]), 
-                  Voter(CANDIDATES["C2"])]
-        result = popularity_contest(sample)
-        self.assertIn(result, ['C1', 'C2'])
+def test_single_vote(voting_mechanism):
+    voters = [Voter(CANDIDATES['C1'])]
+    result = voting_mechanism(voters)
+    assert ('C1', 1.0) in result.items()
+    
+def test_tie(voting_mechanism):
+    voters = [Voter('C1'), Voter('C2')]
+    result = voting_mechanism(voters)
+    assert result['C1'] == result['C2'], "Expected both 'C1' and 'C2' to have the same score"
 
-    def test_multiple_votes(self):
-        sample = [Voter(CANDIDATES["C1"]), 
-                  Voter(CANDIDATES["C1"]), 
-                  Voter(CANDIDATES["C2"])]
-        result = popularity_contest(sample)
-        self.assertEqual(result, 'C1')
+def test_multiple_votes(voting_mechanism):
+    sample = [Voter(CANDIDATES["C1"]), 
+                Voter(CANDIDATES["C1"]), 
+                Voter(CANDIDATES["C2"])]
+    result = voting_mechanism(sample)
+    assert ('C1', 2.0) in result.items()
 
-    def test_single_choice_vote(self):
-        pass # TODO
+def test_weighted(voting_mechanism):
+    voters = [
+        Voter({
+                'C1': 0.8, 
+                'C2': 0.2
+            }),
+        Voter({
+                'C1': 0.1, 
+                'C2': 0.9
+            }), 
+        Voter({
+                'C2': 0.5, 
+                'C3': 0.4,
+                'C4': 0.1
+            }), 
+    ]
+    result = voting_mechanism(voters)
+    print(result)
+    assert 'C2' == list(result.keys())[0]
+    assert result['C2'] in (1.6, 2)
 
-    def test_voters_with_weighing_mechanism(self):
-        voters = [Voter("C1", {'C1': 0.8, 'C2': 0.2}),
-                  Voter(CANDIDATES["C2"], {'C1': 0.1, 'C2': 0.9})]
-        voters = popularity_contest(sample)
-        self.assertEqual(result, 'C1')
+def test_voters_with_decimal_scoring(voting_mechanism):
+    voters = [Voter({'C1': 0.8, 'C2': 0.2}),
+              Voter({'C1': 0.1, 'C2': 0.9})]
+    result = voting_mechanism(voters)
 
-    def test_popularity_with_weighted(self):
-        sample = [
-            Voter({
-                    'C1': 0.8, 
-                    'C2': 0.2
-                }),
-            Voter({
-                    'C1': 0.1, 
-                    'C2': 0.9
-                }), 
-            Voter({
-                    'C2': 0.5, 
-                    'C3': 0.4,
-                    'C4': 0.1
-                }), 
-        ]
-        self.assertEqual(popularity_contest(sample), 'C2')
+    # In scored voting, C1 = 0.9, C2 = 1.1; C2 wins.
+    if voting_mechanism == accumulated_scores_voting:
+        assert 'C2' == list(result.keys())[0]
+        assert ('C1', 0.9) in result.items()
+        assert ('C2', 1.1) in result.items()
+    
+    # In popularity voting, C1 wins one, C2 the other, so they tie.
+    elif voting_mechanism == popularity_contest:
+        assert ('C1', 1.0) in result.items()
+        assert ('C2', 1.0) in result.items()    
 
 ### Tests that are disabled because of pyvoting package issues
     # def test_weighted_vote_fails_with_equal_first_place(self):
@@ -99,7 +119,3 @@ class TestPopularityContest(unittest.TestCase):
     #     votes = Testdata.getRandomVoters(100, 4)
     #     results = tier_list_voting(votes)
     #     self.assertLess(results[0][1], results[1][1])
-
-
-if __name__ == '__main__':
-    unittest.main()
