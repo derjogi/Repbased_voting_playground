@@ -43,6 +43,7 @@ class DistributedVote:
 
 # A vote is the union of DistributedVote and all the simpler variants
 Vote = Union[SingleCandidate, RankedCandidates, FellowshipDistribution, CandidateDistribution, FellowshipCandidate, DistributedVote]
+Candidate = Union[FellowshipCandidate, str]
 
 class Voter:
 
@@ -135,6 +136,12 @@ class Voter:
         """
         return self.normalized_vote
 
+    def get_weight_for(self, candidate: Candidate):
+        if isinstance(candidate, str):
+            candidate = FellowshipCandidate(candidate)
+        weight = [weight for cand, weight in self.normalized_vote if cand == candidate]
+        assert len(weight) == 1, "Multiple candidates with the same name found!"
+        return weight[0]
 
 class NFT(Enum):
 

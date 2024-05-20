@@ -38,9 +38,29 @@ class TestRequirements(unittest.TestCase):
         print('Order of candidates after second round: ', candidates_in_order_2)
         # Make sure that we do have the same order:
         self.assertEqual(candidates_in_order, candidates_in_order_2)  
-    
+
+    def test_weigthed_votes(self):
+        voters = Testdata.getRandomVoters()
+        results_no_weights = accumulated_scores_voting(voters)
+        print('Results without NFT weights: ', results_no_weights)
+        
+        def weighing_mechanism(voter: Voter, id: str):
+            return voter.get_weight_for(id) * len(voter.nfts)
+
+        results_with_weights = accumulated_scores_voting(voters, weighing_mechanism=weighing_mechanism)
+        print('Results with NFT weights: ', results_with_weights)
+
+        # The candidate order might have changed due to the different distribution of weights.
+        # Not sure what we can actually test here properly, except for that all the weights shold be higher...
+        
+        # First, get all candidates, then we can access them and compare:
+        candidates = [candidate for candidate in results_no_weights]
+
+        for candidate in candidates:
+            assert results_no_weights[candidate] < results_with_weights[candidate]
+
     def test_no_tied_winners(self):
-        pass # TODO; currently happens with default RCV & TLV!
+        pass # TODO; currently with default RCV & TLV they're often tied if there are only a few voters!
 
     def test_no_evaluation_below_100_ballots(self):
         pass # TODO
